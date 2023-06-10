@@ -59,6 +59,10 @@ async function run() {
       //   const options = {
       //     sort: { seats: ass === "ass" ? 1 : -1 },
       //   };
+      const result = await classCollection.find().limit(6).toArray();
+      res.send(result);
+    });
+    app.get("/allclasses", async (req, res) => {
       const result = await classCollection.find().toArray();
       res.send(result);
     });
@@ -76,7 +80,7 @@ async function run() {
     });
 
     app.get("/classes", async (req, res) => {
-      const { email } = req.query.email; // Extract the email from req.query
+      const { email } = req.query.email;
       console.log(email);
 
       try {
@@ -85,6 +89,49 @@ async function run() {
       } catch (error) {
         console.error("Error fetching classes:", error);
         res.status(500).send({ message: "An error occurred while fetching classes." });
+      }
+    });
+    // PUT endpoint to handle class approval
+    app.put("/classes/:classId/approve", async (req, res) => {
+      try {
+        const classId = req.params.classId;
+
+        const updatedClass = await classCollection.findOneAndUpdate(
+          { _id: new ObjectId(classId) },
+          { $set: { status: "approved" } },
+          { returnOriginal: false }
+        );
+
+        if (!updatedClass.value) {
+          return res.status(404).json({ error: "Class not found" });
+        }
+
+        res.json(updatedClass.value);
+      } catch (error) {
+        console.error("Error approving class:", error);
+        res.status(500).json({ error: "Failed to approve class" });
+      }
+    });
+
+    // PUT endpoint to handle class denial
+    app.put("/classes/:classId/deny", async (req, res) => {
+      try {
+        const classId = req.params.classId;
+
+        const updatedClass = await classCollection.findOneAndUpdate(
+          { _id: new ObjectId(classId) },
+          { $set: { status: "denied" } },
+          { returnOriginal: false }
+        );
+
+        if (!updatedClass.value) {
+          return res.status(404).json({ error: "Class not found" });
+        }
+
+        res.json(updatedClass.value);
+      } catch (error) {
+        console.error("Error denying class:", error);
+        res.status(500).json({ error: "Failed to deny class" });
       }
     });
 
