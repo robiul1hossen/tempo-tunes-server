@@ -75,6 +75,19 @@ async function run() {
       res.send(result);
     });
 
+    app.get("/classes", async (req, res) => {
+      const { email } = req.query.email; // Extract the email from req.query
+      console.log(email);
+
+      try {
+        const result = await classCollection.find({ email: email }).toArray();
+        res.send(result);
+      } catch (error) {
+        console.error("Error fetching classes:", error);
+        res.status(500).send({ message: "An error occurred while fetching classes." });
+      }
+    });
+
     app.get("/students", async (req, res) => {
       const result = await studentCollection.find().toArray();
       res.send(result);
