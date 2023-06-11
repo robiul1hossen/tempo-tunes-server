@@ -5,27 +5,28 @@ const cors = require("cors");
 require("dotenv").config();
 const port = process.env.PORT || 5000;
 
-// middleware
+// Middleware
 app.use(cors());
 app.use(express.json());
 
 const verifyJWT = (req, res, next) => {
   const authorization = req.headers.authorization;
   if (!authorization) {
-    return res.status(401).send({ error: true, message: "unauthorized access " });
+    return res.status(401).send({ error: true, message: "Unauthorized access" });
   }
   const token = authorization.split(" ")[1];
   jwt.verify(token, process.env.ACCESS_TOKEN_SECRET, (err, decoded) => {
     if (err) {
-      return res.status(401).send({ error: true, message: "unauthorized access " });
+      return res.status(401).send({ error: true, message: "Unauthorized access" });
     }
-    req.decoded = decoded;
+    req.decoded = { email: decoded?.email }; // Set email property explicitly
+    console.log(decoded);
     next();
   });
 };
 
 app.get("/", (req, res) => {
-  res.send("tempo is running");
+  res.send("Tempo is running");
 });
 
 const { MongoClient, ServerApiVersion, ObjectId } = require("mongodb");
@@ -48,6 +49,7 @@ async function run() {
 
     const classCollection = client.db("tempoTunes").collection("classes");
     const studentCollection = client.db("tempoTunes").collection("students");
+    const selectCollection = client.db("tempoTunes").collection("selects");
 
     app.post("/jwt", (req, res) => {
       const user = req.body;
@@ -55,15 +57,17 @@ async function run() {
       res.send(token);
     });
 
-    app.get("/classes", async (req, res) => {
-      //   const options = {
-      //     sort: { seats: ass === "ass" ? 1 : -1 },
-      //   };
-      const result = await classCollection.find().limit(6).toArray();
-      res.send(result);
-    });
     app.get("/allclasses", async (req, res) => {
       const result = await classCollection.find().toArray();
+      res.send(result);
+    });
+    app.get("/allusers", async (req, res) => {
+      const result = await studentCollection.find().toArray();
+      res.send(result);
+    });
+
+    app.get("/classes", async (req, res) => {
+      const result = await classCollection.find().limit(6).toArray();
       res.send(result);
     });
 
@@ -73,25 +77,66 @@ async function run() {
       res.send(result);
     });
 
-    // students api
-    app.get("/allusers", async (req, res) => {
-      const result = await studentCollection.find().toArray();
-      res.send(result);
-    });
-
-    app.get("/classes", async (req, res) => {
-      const { email } = req.query.email;
-      console.log(email);
-
+    app.post("/selects", verifyJWT, async (req, res) => {
       try {
-        const result = await classCollection.find({ email: email }).toArray();
-        res.send(result);
+        const { classId } = req.body;
+        const userEmail = req.decoded?.email;
+
+        const existingSelection = await selectCollection.findOne({ classId, selectedBy: userEmail });
+        if (existingSelection) {
+          return res.status(400).json({ message: "Class already selected" });
+        }
+
+        const selectedClass = await classCollection.findOne({ _id: new ObjectId(classId) });
+        if (!selectedClass) {
+          return res.status(404).json({ message: "Class not found" });
+        }
+
+        // Save the selected class in the selectCollection with user email and classId
+        const newSelection = {
+          classId: selectedClass._id,
+          selectedBy: userEmail,
+          ...selectedClass,
+        };
+        delete newSelection._id;
+
+        await selectCollection.insertOne(newSelection);
+
+        res.json(newSelection);
       } catch (error) {
-        console.error("Error fetching classes:", error);
-        res.status(500).send({ message: "An error occurred while fetching classes." });
+        console.error("Error selecting class:", error);
+        res.status(500).json({ error: "Failed to select class" });
       }
     });
-    // PUT endpoint to handle class approval
+
+    app.put("/classes/:classId", async (req, res) => {
+      try {
+        const classId = req.params.classId;
+        const updatedClass = req.body;
+
+        // Exclude the _id field from the update operation
+        delete updatedClass._id;
+
+        await classCollection.findOneAndUpdate({ _id: new ObjectId(classId) }, { $set: updatedClass });
+
+        res.json(updatedClass);
+      } catch (error) {
+        console.error("Error updating class:", error);
+        res.status(500).json({ error: "Failed to update class" });
+      }
+    });
+    app.get("/selectedclasses", verifyJWT, async (req, res) => {
+      const userEmail = req.decoded?.email;
+
+      try {
+        const result = await classCollection.find({ selectedBy: userEmail }).toArray();
+        res.send(result);
+      } catch (error) {
+        console.error("Error fetching selected classes:", error);
+        res.status(500).send({ message: "An error occurred while fetching selected classes." });
+      }
+    });
+
     app.put("/classes/:classId/approve", async (req, res) => {
       try {
         const classId = req.params.classId;
@@ -113,7 +158,6 @@ async function run() {
       }
     });
 
-    // PUT endpoint to handle class denial
     app.put("/classes/:classId/deny", async (req, res) => {
       try {
         const classId = req.params.classId;
@@ -148,6 +192,7 @@ async function run() {
       if (existingUser) {
         return res.send({ message: "User already exists." });
       }
+
       // Assign default role as "student" to the new user
       user.role = "student";
       const result = await studentCollection.insertOne(user);
@@ -182,8 +227,9 @@ async function run() {
     // await client.close();
   }
 }
+
 run().catch(console.dir);
 
 app.listen(port, () => {
-  console.log(`tempo is running on port : ${port}`);
+  console.log(`tempo is running on port: ${port}`);
 });
