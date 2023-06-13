@@ -1,6 +1,7 @@
 const express = require("express");
 const app = express();
 const jwt = require("jsonwebtoken");
+const stripe = require("stripe")(process.env.PAYMENT_SECRET_KEY);
 const cors = require("cors");
 require("dotenv").config();
 const port = process.env.PORT || 5000;
@@ -19,8 +20,8 @@ const verifyJWT = (req, res, next) => {
     if (err) {
       return res.status(401).send({ error: true, message: "Unauthorized access" });
     }
-    req.decoded = { email: decoded?.email }; // Set email property explicitly
-    console.log(decoded);
+    req.decoded = { email: decoded?.email };
+    // console.log(decoded.email);
     next();
   });
 };
@@ -30,6 +31,7 @@ app.get("/", (req, res) => {
 });
 
 const { MongoClient, ServerApiVersion, ObjectId } = require("mongodb");
+const { default: Stripe } = require("stripe");
 
 const uri = `mongodb+srv://${process.env.DB_USER}:${process.env.DB_PASS}@cluster0.dowmgti.mongodb.net/?retryWrites=true&w=majority`;
 
@@ -57,56 +59,64 @@ async function run() {
       res.send(token);
     });
 
-    app.get("/allclasses", async (req, res) => {
-      const result = await classCollection.find().toArray();
+    app.get("/allclasses", verifyJWT, async (req, res) => {
+      const email = req.query.userEmail;
+      const result = await classCollection.find({ email }).toArray();
       res.send(result);
     });
-    app.get("/allusers", async (req, res) => {
+    app.get("/allclass", verifyJWT, async (req, res) => {
+      const status = req.query.status;
+      const result = await classCollection.find({ status }).toArray();
+      res.send(result);
+    });
+
+    app.get("/allusers", verifyJWT, async (req, res) => {
       const result = await studentCollection.find().toArray();
       res.send(result);
     });
 
-    app.get("/classes", async (req, res) => {
+    app.get("/classes", verifyJWT, async (req, res) => {
       const result = await classCollection.find().limit(6).toArray();
       res.send(result);
     });
 
-    app.post("/classes", async (req, res) => {
+    app.post("/classes", verifyJWT, async (req, res) => {
       const newClass = req.body;
       const result = await classCollection.insertOne(newClass);
       res.send(result);
     });
 
+    app.get("/selects", verifyJWT, async (req, res) => {
+      const userEmail = req.query.userEmail;
+      const result = await selectCollection.find({ userEmail }).toArray();
+      res.send(result);
+    });
+
+    app.delete("/selects", verifyJWT, async (req, res) => {
+      const userEmail = req.query.userEmail;
+      const userId = req.query._id;
+      const result = await selectCollection.deleteOne({
+        userEmail,
+        _id: new ObjectId(userId),
+      });
+      console.log(userEmail);
+      res.send(result);
+    });
+
     app.post("/selects", verifyJWT, async (req, res) => {
-      try {
-        const { classId } = req.body;
-        const userEmail = req.decoded?.email;
-
-        const existingSelection = await selectCollection.findOne({ classId, selectedBy: userEmail });
-        if (existingSelection) {
-          return res.status(400).json({ message: "Class already selected" });
-        }
-
-        const selectedClass = await classCollection.findOne({ _id: new ObjectId(classId) });
-        if (!selectedClass) {
-          return res.status(404).json({ message: "Class not found" });
-        }
-
-        // Save the selected class in the selectCollection with user email and classId
-        const newSelection = {
-          classId: selectedClass._id,
-          selectedBy: userEmail,
-          ...selectedClass,
-        };
-        delete newSelection._id;
-
-        await selectCollection.insertOne(newSelection);
-
-        res.json(newSelection);
-      } catch (error) {
-        console.error("Error selecting class:", error);
-        res.status(500).json({ error: "Failed to select class" });
-      }
+      const { instrument, instructor, email, price, seats, image, status, enrolled, userEmail } = req.body;
+      const result = await selectCollection.insertOne({
+        instrument,
+        instructor,
+        email,
+        price,
+        seats,
+        image,
+        status,
+        enrolled,
+        userEmail,
+      });
+      res.send(result);
     });
 
     app.put("/classes/:classId", async (req, res) => {
