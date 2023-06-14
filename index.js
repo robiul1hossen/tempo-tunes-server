@@ -67,13 +67,13 @@ async function run() {
       const result = await classCollection.find({ email }).toArray();
       res.send(result);
     });
-    app.get("/allclass", verifyJWT, async (req, res) => {
-      const status = req.query.status;
-      const result = await classCollection.find({ status }).toArray();
+    app.get("/allclass", async (req, res) => {
+      // const status = req.query.status;
+      const result = await classCollection.find().toArray();
       res.send(result);
     });
 
-    app.get("/allusers", verifyJWT, async (req, res) => {
+    app.get("/allusers", async (req, res) => {
       const result = await studentCollection.find().toArray();
       res.send(result);
     });
