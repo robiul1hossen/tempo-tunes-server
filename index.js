@@ -54,6 +54,7 @@ async function run() {
     const classCollection = client.db("tempoTunes").collection("classes");
     const studentCollection = client.db("tempoTunes").collection("students");
     const selectCollection = client.db("tempoTunes").collection("selects");
+    const paymentCollection = client.db("tempoTunes").collection("payments");
 
     app.post("/jwt", (req, res) => {
       const user = req.body;
@@ -105,6 +106,7 @@ async function run() {
       res.send(result);
     });
 
+    // payment apis
     app.post("/create-payment-intent", verifyJWT, async (req, res) => {
       const { price } = req.body;
       const amount = parseInt(price * 100);
@@ -117,6 +119,18 @@ async function run() {
       res.send({
         clientSecret: paymentIntent.client_secret,
       });
+    });
+
+    app.post("/payments", verifyJWT, async (req, res) => {
+      const payment = req.body;
+      const result = await paymentCollection.insertOne(payment);
+      res.send(result);
+    });
+
+    app.get("/payments", verifyJWT, async (req, res) => {
+      const userEmail = req.decoded?.email;
+      const result = await paymentCollection.find({ userEmail: userEmail }).toArray();
+      res.send(result);
     });
 
     app.post("/selects", verifyJWT, async (req, res) => {
