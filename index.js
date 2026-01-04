@@ -15,12 +15,16 @@ app.use(bodyParser.json());
 const verifyJWT = (req, res, next) => {
   const authorization = req.headers.authorization;
   if (!authorization) {
-    return res.status(401).send({ error: true, message: "Unauthorized access" });
+    return res
+      .status(401)
+      .send({ error: true, message: "Unauthorized access" });
   }
   const token = authorization.split(" ")[1];
   jwt.verify(token, process.env.ACCESS_TOKEN_SECRET, (err, decoded) => {
     if (err) {
-      return res.status(401).send({ error: true, message: "Unauthorized access" });
+      return res
+        .status(401)
+        .send({ error: true, message: "Unauthorized access" });
     }
     req.decoded = { email: decoded?.email };
     // console.log(decoded.email);
@@ -58,7 +62,9 @@ async function run() {
 
     app.post("/jwt", (req, res) => {
       const user = req.body;
-      const token = jwt.sign(user, process.env.ACCESS_TOKEN_SECRET, { expiresIn: "1h" });
+      const token = jwt.sign(user, process.env.ACCESS_TOKEN_SECRET, {
+        expiresIn: "1h",
+      });
       res.send(token);
     });
 
@@ -67,10 +73,60 @@ async function run() {
       const result = await classCollection.find({ email }).toArray();
       res.send(result);
     });
+    // app.get("/allclass", async (req, res) => {
+    //   const { status, search } = req.query;
+
+    //   let query = {};
+
+    //   if (status) {
+    //     query.status = status;
+    //   }
+
+    //   if (search) {
+    //     query.$or = [
+    //       { instrument: { $regex: search, $options: "i" } },
+    //       { instructor: { $regex: search, $options: "i" } },
+    //     ];
+    //   }
+
+    //   const result = await classCollection.find(query).toArray();
+    //   res.send(result);
+    // });
+
     app.get("/allclass", async (req, res) => {
-      // const status = req.query.status;
-      const result = await classCollection.find().toArray();
-      res.send(result);
+      try {
+        const { status, search, sortFees, sortDate } = req.query;
+
+        // 1️⃣ Build the query object
+        let query = {};
+        if (status) query.status = status;
+
+        if (search) {
+          query.$or = [
+            { instrument: { $regex: search, $options: "i" } },
+            { instructor: { $regex: search, $options: "i" } },
+          ];
+        }
+
+        // 2️⃣ Build sort options
+        let sortOptions = {};
+        if (sortFees === "low-high") sortOptions.price = 1;
+        if (sortFees === "high-low") sortOptions.price = -1;
+        if (sortDate === "newest") sortOptions.createdAt = -1;
+        if (sortDate === "oldest") sortOptions.createdAt = 1;
+
+        // 3️⃣ Fetch data from MongoDB with query and sort
+        const result = await classCollection
+          .find(query)
+          .sort(sortOptions)
+          .toArray();
+
+        // 4️⃣ Send response
+        res.send(result);
+      } catch (error) {
+        console.error("Error fetching classes:", error);
+        res.status(500).send({ error: "Failed to fetch classes" });
+      }
     });
 
     app.get("/allusers", async (req, res) => {
@@ -129,12 +185,24 @@ async function run() {
 
     app.get("/payments", verifyJWT, async (req, res) => {
       const userEmail = req.decoded?.email;
-      const result = await paymentCollection.find({ userEmail: userEmail }).toArray();
+      const result = await paymentCollection
+        .find({ userEmail: userEmail })
+        .toArray();
       res.send(result);
     });
 
     app.post("/selects", verifyJWT, async (req, res) => {
-      const { instrument, instructor, email, price, seats, image, status, enrolled, userEmail } = req.body;
+      const {
+        instrument,
+        instructor,
+        email,
+        price,
+        seats,
+        image,
+        status,
+        enrolled,
+        userEmail,
+      } = req.body;
       const result = await selectCollection.insertOne({
         instrument,
         instructor,
@@ -157,7 +225,10 @@ async function run() {
         // Exclude the _id field from the update operation
         delete updatedClass._id;
 
-        await classCollection.findOneAndUpdate({ _id: new ObjectId(classId) }, { $set: updatedClass });
+        await classCollection.findOneAndUpdate(
+          { _id: new ObjectId(classId) },
+          { $set: updatedClass }
+        );
 
         res.json(updatedClass);
       } catch (error) {
@@ -169,11 +240,15 @@ async function run() {
       const userEmail = req.decoded?.email;
 
       try {
-        const result = await classCollection.find({ selectedBy: userEmail }).toArray();
+        const result = await classCollection
+          .find({ selectedBy: userEmail })
+          .toArray();
         res.send(result);
       } catch (error) {
         console.error("Error fetching selected classes:", error);
-        res.status(500).send({ message: "An error occurred while fetching selected classes." });
+        res.status(500).send({
+          message: "An error occurred while fetching selected classes.",
+        });
       }
     });
 
@@ -255,13 +330,17 @@ async function run() {
         res.send(result);
       } catch (error) {
         console.error("Error updating student role:", error);
-        res.status(500).send({ message: "An error occurred while updating student role." });
+        res
+          .status(500)
+          .send({ message: "An error occurred while updating student role." });
       }
     });
 
     // Send a ping to confirm a successful connection
     // await client.db("admin").command({ ping: 1 });
-    console.log("Pinged your deployment. You successfully connected to MongoDB!");
+    console.log(
+      "Pinged your deployment. You successfully connected to MongoDB!"
+    );
   } finally {
     // Ensures that the client will close when you finish/error
     // await client.close();
